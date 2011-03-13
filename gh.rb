@@ -5,21 +5,43 @@ require 'net/http'
 require 'simplejsonparser'
 # require 'nkf'
 
-url = "https://github.com/api/v2/json/repos/show/gosyujin"
-
-# GET
-uri = URI.parse(url)
-proxy_class = Net::HTTP::Proxy(ENV["PROXY"], 8080)
-http = proxy_class.new(uri.host)
-http.start do |http|
-	res = http.get(uri.path)
-	if res.code == "200" then
-		json = res.body
-		jsonparse = JsonParser.new.parse(json)
-		for i in 0..jsonparse['repositories'].length - 1
-			puts `git clone git@github.com:#{jsonparse['repositories'][i]['owner']}/#{jsonparse['repositories'][i]['name']}.git`
+def get(url)
+	uri = URI.parse(url)
+	proxy_class = Net::HTTP::Proxy(ENV["PROXY"], 8080)
+	http = proxy_class.new(uri.host)
+	http.start do |http|
+		res = http.get(uri.path)
+		if res.code == "200" then
+			json = res.body
+			JsonParser.new.parse(json)
+		else
+			print "#{res.code}\n"
 		end
-	else
-		print "#{res.code}\n"
+	end
+end
+
+if ARGV.length == 0 then
+	print "Usage: gh.rb USERNAME [github|gist]\n"
+	exit 1
+end
+
+user = ARGV[0]
+url = ""
+case ARGV[1]
+when "github" then 
+	url = "https://github.com/api/v2/json/repos/show/#{user}"
+	param = get(url)
+	for i in 0..param['repositories'].length - 1
+		owner = param['repositories'][i]['owner']
+		name = param['repositories'][i]['name']
+		puts `git clone git@github.com:#{owner}/#{name}.git`
+	end
+when "gist" then
+	url = "http://gist.github.com/api/v1/json/gists/#{user}"
+	param = get(url)
+	for i in 0..param['gists'].length - 1
+		files = param['gists'][i]['files'][0].split(".")[0]
+		repo = param['gists'][i]['repo']
+		puts `git clone git://gist.github.com/#{repo}.git #{files}`
 	end
 end
